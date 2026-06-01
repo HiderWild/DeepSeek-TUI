@@ -582,6 +582,10 @@ pub struct ConfigView {
 
 const CONFIG_MIN_KEY_COLUMN_WIDTH: usize = 19;
 const CONFIG_VALUE_COLUMN_WIDTH: usize = 44;
+const CONFIG_MIN_VALUE_COLUMN_WIDTH: usize = 10;
+const CONFIG_SCOPE_COLUMN_WIDTH: usize = 7;
+const CONFIG_ROW_PREFIX_WIDTH: usize = 2;
+const CONFIG_COLUMN_GAPS_WIDTH: usize = 2;
 
 impl ConfigView {
     pub fn new_for_app(app: &App) -> Self {
@@ -909,6 +913,27 @@ impl ConfigView {
             .max()
             .unwrap_or(CONFIG_MIN_KEY_COLUMN_WIDTH)
             .max(CONFIG_MIN_KEY_COLUMN_WIDTH)
+    }
+
+    fn table_column_widths(&self, content_width: usize) -> (usize, usize, usize) {
+        let fixed_width =
+            CONFIG_ROW_PREFIX_WIDTH + CONFIG_COLUMN_GAPS_WIDTH + CONFIG_SCOPE_COLUMN_WIDTH;
+        let key_value_width = content_width.saturating_sub(fixed_width);
+        let desired_key_width = self.key_column_width();
+
+        if key_value_width == 0 {
+            return (0, 0, CONFIG_SCOPE_COLUMN_WIDTH);
+        }
+
+        let minimum_key_width = CONFIG_MIN_KEY_COLUMN_WIDTH.min(key_value_width);
+        let key_width = desired_key_width
+            .min(key_value_width.saturating_sub(CONFIG_MIN_VALUE_COLUMN_WIDTH))
+            .max(minimum_key_width);
+        let value_width = key_value_width
+            .saturating_sub(key_width)
+            .min(CONFIG_VALUE_COLUMN_WIDTH);
+
+        (key_width, value_width, CONFIG_SCOPE_COLUMN_WIDTH)
     }
 
     fn selected_row_index(&self) -> Option<usize> {
@@ -1439,7 +1464,8 @@ impl ModalView for ConfigView {
                 self.filter.clone()
             };
 
-            let key_column_width = self.key_column_width();
+            let (key_column_width, value_column_width, scope_column_width) =
+                self.table_column_widths(usize::from(inner.width));
             let mut lines: Vec<Line> = vec![
                 Line::from(vec![Span::styled(
                     self.tr(MessageId::ConfigTitle),
@@ -1455,15 +1481,22 @@ impl ModalView for ConfigView {
                 ]),
                 Line::from(""),
                 Line::from(format!(
-                    "  {:<key_width$} {:<value_width$} Scope",
+                    "  {:<key_width$} {:<value_width$} {:<scope_width$}",
                     "Key",
                     "Value",
+                    "Scope",
                     key_width = key_column_width,
-                    value_width = CONFIG_VALUE_COLUMN_WIDTH
+                    value_width = value_column_width,
+                    scope_width = scope_column_width
                 )),
                 Line::from(format!(
                     "  {}",
-                    "-".repeat(key_column_width + CONFIG_VALUE_COLUMN_WIDTH + 8)
+                    "-".repeat(
+                        key_column_width
+                            + value_column_width
+                            + scope_column_width
+                            + CONFIG_COLUMN_GAPS_WIDTH
+                    )
                 )),
             ];
             let mut row_hitboxes = Vec::new();
@@ -1491,17 +1524,18 @@ impl ModalView for ConfigView {
                         } else {
                             Style::default().fg(palette::TEXT_PRIMARY)
                         };
-                        let value = truncate_view_text(
-                            &self.row_display_value(row),
-                            CONFIG_VALUE_COLUMN_WIDTH,
-                        );
+                        let key = truncate_view_text(&row.key, key_column_width);
+                        let value =
+                            truncate_view_text(&self.row_display_value(row), value_column_width);
+                        let scope = truncate_view_text(row.scope.label(), scope_column_width);
                         let mut line = Line::from(format!(
-                            "  {:<key_width$} {:<value_width$} {}",
-                            row.key,
+                            "  {:<key_width$} {:<value_width$} {:<scope_width$}",
+                            key,
                             value,
-                            row.scope.label(),
+                            scope,
                             key_width = key_column_width,
-                            value_width = CONFIG_VALUE_COLUMN_WIDTH
+                            value_width = value_column_width,
+                            scope_width = scope_column_width
                         ));
                         line.style = style;
                         lines.push(line);
