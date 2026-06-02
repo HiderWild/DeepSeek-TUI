@@ -3721,11 +3721,6 @@ mod speech_cli_tests {
             PathBuf::from("audio").join(default_speech_output_name("pcm")),
             PathBuf::from("audio").join("speech.pcm16")
         );
-        assert_eq!(
-            Some(PathBuf::from("custom.wav"))
-                .unwrap_or_else(|| PathBuf::from(default_speech_output_name("mp3"))),
-            PathBuf::from("custom.wav")
-        );
     }
 
     #[test]

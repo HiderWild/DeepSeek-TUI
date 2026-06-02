@@ -131,7 +131,7 @@ fn tool_loop_body(turn: usize, with_reasoning: bool) -> Vec<u8> {
     } else {
         ""
     };
-    let tool_name = if turn % 2 == 0 {
+    let tool_name = if turn.is_multiple_of(2) {
         "read_file"
     } else {
         "write_file"
@@ -301,7 +301,7 @@ fn compaction_must_cause_at_least_one_miss() {
             // Post-compaction: system prompt is truncated/changed.
             format!("You are a helpful assistant.\n\nUser: turn {turn}\nAssistant:")
         };
-        cache.submit(&body.as_bytes());
+        cache.submit(body.as_bytes());
     }
 
     // After compaction, there should be at least one significant miss.
