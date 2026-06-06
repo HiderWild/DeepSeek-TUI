@@ -43,6 +43,8 @@ class RuntimeStatusView {
         baseUrl: "http://127.0.0.1:7878",
         detail: "Runtime has not been checked yet.",
     };
+    threads = [];
+    threadsDetail = "Connect to the runtime to load recent threads.";
     resolveWebviewView(view) {
         this.view = view;
         view.webview.options = { enableScripts: true };
@@ -56,11 +58,19 @@ class RuntimeStatusView {
             else if (message.command === "terminal") {
                 void vscode.commands.executeCommand("codewhale.openTerminal");
             }
+            else if (message.command === "threads") {
+                void vscode.commands.executeCommand("codewhale.refreshAgentView");
+            }
         });
         this.render();
     }
     update(state) {
         this.state = state;
+        this.render();
+    }
+    updateThreads(threads, detail) {
+        this.threads = threads;
+        this.threadsDetail = detail;
         this.render();
     }
     render() {
@@ -69,6 +79,9 @@ class RuntimeStatusView {
         }
         const badge = labelFor(this.state.kind);
         const nonce = makeNonce();
+        const threadsHtml = this.threads.length > 0
+            ? this.threads.map((thread) => renderThread(thread)).join("")
+            : `<p class="detail">${escapeHtml(this.threadsDetail)}</p>`;
         this.view.webview.html = `<!doctype html>
 <html lang="en">
 <head>
@@ -79,6 +92,11 @@ class RuntimeStatusView {
     body { padding: 14px; color: var(--vscode-foreground); font-family: var(--vscode-font-family); }
     .status { margin-bottom: 12px; font-weight: 600; }
     .detail { margin: 0 0 14px; color: var(--vscode-descriptionForeground); line-height: 1.45; }
+    .section-title { margin: 18px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; color: var(--vscode-descriptionForeground); }
+    .thread { padding: 8px 0; border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border)); }
+    .thread-title { margin-bottom: 4px; font-weight: 600; overflow-wrap: anywhere; }
+    .thread-preview { margin-bottom: 5px; color: var(--vscode-descriptionForeground); line-height: 1.35; overflow-wrap: anywhere; }
+    .thread-meta { color: var(--vscode-descriptionForeground); font-size: 11px; overflow-wrap: anywhere; }
     code { color: var(--vscode-textLink-foreground); }
     button { width: 100%; margin: 4px 0; }
   </style>
@@ -88,8 +106,11 @@ class RuntimeStatusView {
   <p class="detail">${escapeHtml(this.state.detail)}</p>
   <p class="detail"><code>${escapeHtml(this.state.baseUrl)}</code></p>
   <button data-command="check">Check Runtime</button>
+  <button data-command="threads">Refresh Threads</button>
   <button data-command="start">Start Local Runtime</button>
   <button data-command="terminal">Open CodeWhale Terminal</button>
+  <div class="section-title">Agent View</div>
+  ${threadsHtml}
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     for (const button of document.querySelectorAll("button[data-command]")) {
@@ -101,6 +122,16 @@ class RuntimeStatusView {
     }
 }
 exports.RuntimeStatusView = RuntimeStatusView;
+function renderThread(thread) {
+    const status = thread.latestTurnStatus ? ` · ${thread.latestTurnStatus}` : "";
+    const archived = thread.archived ? " · archived" : "";
+    const updated = thread.updatedAt ? ` · ${formatTimestamp(thread.updatedAt)}` : "";
+    return `<div class="thread">
+    <div class="thread-title">${escapeHtml(thread.title)}</div>
+    <div class="thread-preview">${escapeHtml(thread.preview || "No recent message.")}</div>
+    <div class="thread-meta">${escapeHtml(`${thread.mode} · ${thread.model}${status}${archived}${updated}`)}</div>
+  </div>`;
+}
 function labelFor(kind) {
     switch (kind) {
         case "connected":
@@ -112,6 +143,13 @@ function labelFor(kind) {
         case "offline":
             return "Offline";
     }
+}
+function formatTimestamp(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleString();
 }
 function escapeHtml(value) {
     return value

@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.readRuntimeConfig = readRuntimeConfig;
 exports.runtimeBaseUrl = runtimeBaseUrl;
 exports.checkRuntime = checkRuntime;
+exports.listThreadSummaries = listThreadSummaries;
 exports.startRuntimeTerminal = startRuntimeTerminal;
 exports.openCodeWhaleTerminal = openCodeWhaleTerminal;
 const http = __importStar(require("node:http"));
@@ -83,6 +84,17 @@ async function checkRuntime(config) {
         detail: version ? `Connected to CodeWhale ${version}.` : "Connected to CodeWhale runtime.",
         version,
     };
+}
+async function listThreadSummaries(config, limit = 8) {
+    const baseUrl = runtimeBaseUrl(config);
+    const response = await requestJson(`${baseUrl}/v1/threads/summary?limit=${encodeURIComponent(String(limit))}`, config.token);
+    if (response.statusCode === 401) {
+        throw new Error("Thread summaries require the runtime bearer token.");
+    }
+    if (response.statusCode !== 200) {
+        throw new Error(`Thread summary returned HTTP ${response.statusCode}.`);
+    }
+    return readThreadSummaries(response.body);
 }
 function startRuntimeTerminal(config) {
     const terminal = vscode.window.createTerminal("CodeWhale Runtime");
@@ -151,6 +163,36 @@ function readVersion(value) {
     }
     const version = value.version;
     return typeof version === "string" ? version : undefined;
+}
+function readThreadSummaries(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.flatMap((item) => {
+        if (!item || typeof item !== "object") {
+            return [];
+        }
+        const record = item;
+        const id = readString(record.id);
+        if (!id) {
+            return [];
+        }
+        return [
+            {
+                id,
+                title: readString(record.title) ?? "New Thread",
+                preview: readString(record.preview) ?? "",
+                model: readString(record.model) ?? "unknown",
+                mode: readString(record.mode) ?? "agent",
+                archived: record.archived === true,
+                updatedAt: readString(record.updated_at) ?? "",
+                latestTurnStatus: readString(record.latest_turn_status),
+            },
+        ];
+    });
+}
+function readString(value) {
+    return typeof value === "string" ? value : undefined;
 }
 function shellQuote(value) {
     if (/^[A-Za-z0-9_./:=+-]+$/.test(value)) {

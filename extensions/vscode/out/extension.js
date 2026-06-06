@@ -45,6 +45,12 @@ function activate(context) {
     status.command = "codewhale.checkRuntime";
     context.subscriptions.push(output, status);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(status_1.RuntimeStatusView.viewType, statusView));
+    const refreshAgentView = async () => {
+        const config = (0, runtime_1.readRuntimeConfig)();
+        const threads = await (0, runtime_1.listThreadSummaries)(config);
+        statusView.updateThreads(threads, "Showing recent runtime threads.");
+        output.appendLine(`Loaded ${threads.length} runtime thread summaries.`);
+    };
     const updateStatus = (text, tooltip) => {
         status.text = text;
         status.tooltip = tooltip;
@@ -72,17 +78,38 @@ function activate(context) {
         switch (state.kind) {
             case "connected":
                 updateStatus("$(check) CodeWhale", state.detail);
+                try {
+                    await refreshAgentView();
+                }
+                catch (error) {
+                    const detail = error instanceof Error ? error.message : String(error);
+                    statusView.updateThreads([], detail);
+                    output.appendLine(`Runtime thread summaries unavailable: ${detail}`);
+                }
                 break;
             case "auth-required":
                 updateStatus("$(lock) CodeWhale", state.detail);
+                statusView.updateThreads([], "Runtime token is required before threads can load.");
                 break;
             case "offline":
             case "error":
                 updateStatus("$(warning) CodeWhale", state.detail);
+                statusView.updateThreads([], "Connect to the runtime to load recent threads.");
                 break;
         }
         output.appendLine(`${new Date().toISOString()} ${state.kind}: ${state.detail}`);
         return state;
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("codewhale.refreshAgentView", async () => {
+        try {
+            await refreshAgentView();
+        }
+        catch (error) {
+            const detail = error instanceof Error ? error.message : String(error);
+            statusView.updateThreads([], detail);
+            output.appendLine(`Runtime thread summaries unavailable: ${detail}`);
+            void vscode.window.showWarningMessage(detail);
+        }
     }));
     context.subscriptions.push(vscode.commands.registerCommand("codewhale.openRuntimeDocs", () => {
         void vscode.env.openExternal(vscode.Uri.parse("https://github.com/Hmbown/CodeWhale/blob/main/docs/RUNTIME_API.md"));

@@ -7,11 +7,13 @@ This first slice is intentionally small:
 - open CodeWhale in an integrated terminal
 - start `codewhale serve --http` in a visible terminal
 - check a local runtime through `/health` and `/v1/runtime/info`
-- show connection state in the status bar and CodeWhale activity view
+- show connection state in the status bar
+- show a read-only Agent View with recent runtime thread summaries from
+  `/v1/threads/summary`
 
-It does not expose the full chat webview, VS Code Agent View integration,
-inline edit application, marketplace publish workflow, or retry/undo/snapshot
-GUI endpoints yet.
+It does not expose the full chat webview, VS Code Agent View chat/editor
+integration, inline edit application, marketplace publish workflow, or
+retry/undo/snapshot GUI endpoints yet.
 
 ## Local Use
 

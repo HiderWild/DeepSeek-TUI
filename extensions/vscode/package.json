@@ -20,6 +20,7 @@
     "onCommand:codewhale.openTerminal",
     "onCommand:codewhale.startRuntime",
     "onCommand:codewhale.checkRuntime",
+    "onCommand:codewhale.refreshAgentView",
     "onCommand:codewhale.openRuntimeDocs",
     "onView:codewhale.runtimeStatus"
   ],
@@ -43,6 +44,10 @@
       {
         "command": "codewhale.checkRuntime",
         "title": "CodeWhale: Check Runtime"
+      },
+      {
+        "command": "codewhale.refreshAgentView",
+        "title": "CodeWhale: Refresh Agent View"
       },
       {
         "command": "codewhale.openRuntimeDocs",
@@ -90,7 +95,7 @@
         {
           "type": "webview",
           "id": "codewhale.runtimeStatus",
-          "name": "Runtime"
+          "name": "Agent View"
         }
       ]
     }

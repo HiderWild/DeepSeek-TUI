@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import {
   checkRuntime,
+  listThreadSummaries,
   openCodeWhaleTerminal,
   readRuntimeConfig,
   runtimeBaseUrl,
@@ -18,6 +19,13 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(RuntimeStatusView.viewType, statusView),
   );
+
+  const refreshAgentView = async (): Promise<void> => {
+    const config = readRuntimeConfig();
+    const threads = await listThreadSummaries(config);
+    statusView.updateThreads(threads, "Showing recent runtime threads.");
+    output.appendLine(`Loaded ${threads.length} runtime thread summaries.`);
+  };
 
   const updateStatus = (text: string, tooltip: string): void => {
     status.text = text;
@@ -56,18 +64,40 @@ export function activate(context: vscode.ExtensionContext): void {
       switch (state.kind) {
         case "connected":
           updateStatus("$(check) CodeWhale", state.detail);
+          try {
+            await refreshAgentView();
+          } catch (error: unknown) {
+            const detail = error instanceof Error ? error.message : String(error);
+            statusView.updateThreads([], detail);
+            output.appendLine(`Runtime thread summaries unavailable: ${detail}`);
+          }
           break;
         case "auth-required":
           updateStatus("$(lock) CodeWhale", state.detail);
+          statusView.updateThreads([], "Runtime token is required before threads can load.");
           break;
         case "offline":
         case "error":
           updateStatus("$(warning) CodeWhale", state.detail);
+          statusView.updateThreads([], "Connect to the runtime to load recent threads.");
           break;
       }
 
       output.appendLine(`${new Date().toISOString()} ${state.kind}: ${state.detail}`);
       return state;
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("codewhale.refreshAgentView", async () => {
+      try {
+        await refreshAgentView();
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        statusView.updateThreads([], detail);
+        output.appendLine(`Runtime thread summaries unavailable: ${detail}`);
+        void vscode.window.showWarningMessage(detail);
+      }
     }),
   );
 

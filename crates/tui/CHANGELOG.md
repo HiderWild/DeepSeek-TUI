@@ -40,13 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release-safe. Thanks @AdityaVG13 for the WhaleFlow draft and cost-tracking
   direction.
 - Added an official VS Code extension Phase 0 scaffold with terminal launch,
-  local runtime attach checks, status bar state, and a CodeWhale runtime status
-  view. This answers the VS Code GUI lane without exposing chat webviews,
-  Agent View, inline edits, or retry/undo runtime endpoints yet (#461, #462,
-  #480, #1584, #2580). Thanks @AiurArtanis for the Agent View prompt,
-  @lbcheng888 for the earlier scaffold, and @BigBenLabs, @lzx1545642258,
-  @yangdaowan, @mangdehuang, @VerrPower, @hejia-v, @nasus9527, and @ygzhang-cn
-  for the GUI/VS Code demand and validation trail.
+  local runtime attach checks, status bar state, and a read-only Agent View
+  preview backed by recent runtime thread summaries. This answers the VS Code
+  GUI lane without exposing chat webviews, inline edits, or retry/undo runtime
+  endpoints yet (#461, #462, #480, #1584, #2580). Thanks @AiurArtanis for the
+  Agent View prompt, @lbcheng888 for the earlier scaffold, and @BigBenLabs,
+  @lzx1545642258, @yangdaowan, @mangdehuang, @VerrPower, @hejia-v,
+  @nasus9527, and @ygzhang-cn for the GUI/VS Code demand and validation trail.
 - Added `POST /v1/sessions` for runtime clients to save a completed thread as a
   managed session. The endpoint preserves thread title/model/mode/workspace
   metadata, maps missing threads to 404, and returns 409 instead of snapshotting
