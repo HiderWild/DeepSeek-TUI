@@ -1843,11 +1843,13 @@ async fn run_event_loop(
 
                         // Generate ghost-text follow-up suggestion asynchronously.
                         if status == crate::core::events::TurnOutcomeStatus::Completed
+                            && config.prompt_suggestion_enabled()
                             && app.api_messages.len() >= 2
                         {
                             let suggestion_cell = app.prompt_suggestion_cell.clone();
                             let api_key = config.deepseek_api_key().unwrap_or_default();
                             let base_url = config.deepseek_base_url();
+                            let model = config.default_model();
                             let messages: Vec<crate::models::Message> = app.api_messages.clone();
                             let gen_token = app
                                 .prompt_suggestion_gen
@@ -1860,10 +1862,7 @@ async fn run_event_loop(
                                         );
                                     if let Some(suggestion) =
                                         crate::tui::prompt_suggestion::generate_suggestion(
-                                            &api_key,
-                                            &base_url,
-                                            "deepseek-v4-flash",
-                                            &summary,
+                                            &api_key, &base_url, &model, &summary,
                                         )
                                         .await
                                         && let Ok(mut guard) = suggestion_cell.lock()
