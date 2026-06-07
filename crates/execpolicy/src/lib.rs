@@ -347,11 +347,15 @@ impl ExecPolicyEngine {
     pub fn check(&self, ctx: ExecPolicyContext<'_>) -> Result<ExecPolicyDecision> {
         let normalized = normalize_command(ctx.command);
         let (trusted_prefixes, denied_prefixes) = self.resolve_prefixes();
-        // Deny rules use simple prefix matching (no arity semantics needed).
-        if let Some(rule) = denied_prefixes
-            .iter()
-            .find(|rule| normalized.starts_with(&normalize_command(rule)))
-        {
+        // Deny rules use word-boundary prefix matching: the command must either
+        // equal the rule or start with the rule followed by a space, so "rm"
+        // blocks "rm -rf /" but NOT "rmdir" or "rmview".
+        if let Some(rule) = denied_prefixes.iter().find(|rule| {
+            let norm_rule = normalize_command(rule);
+            normalized == norm_rule
+                || (normalized.starts_with(&norm_rule)
+                    && normalized.as_bytes().get(norm_rule.len()) == Some(&b' '))
+        }) {
             return Ok(ExecPolicyDecision {
                 allow: false,
                 requires_approval: false,
@@ -442,7 +446,13 @@ impl ExecPolicyEngine {
 }
 
 fn normalize_command(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
+    // Normalize: lowercase, collapse internal whitespace to single spaces.
+    // This prevents bypass via "git  status" (double space) vs "git status".
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
 }
 
 fn first_token(command: &str) -> String {
