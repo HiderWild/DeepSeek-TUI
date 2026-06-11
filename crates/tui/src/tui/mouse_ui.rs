@@ -1024,3 +1024,116 @@ pub(crate) fn selection_to_text(app: &App) -> Option<String> {
     }
     Some(selected)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::sidebar_click_action;
+    use crate::config::Config;
+    use crate::tui::app::{App, SidebarHoverRow, SidebarHoverSection, TuiOptions};
+    use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use ratatui::layout::Rect;
+    use std::path::PathBuf;
+
+    fn create_test_app() -> App {
+        let options = TuiOptions {
+            model: "deepseek-v4-pro".to_string(),
+            workspace: PathBuf::from("."),
+            config_path: None,
+            config_profile: None,
+            allow_shell: false,
+            use_alt_screen: true,
+            use_mouse_capture: false,
+            use_bracketed_paste: true,
+            max_subagents: 1,
+            skills_dir: PathBuf::from("."),
+            memory_path: PathBuf::from("memory.md"),
+            notes_path: PathBuf::from("notes.txt"),
+            mcp_config_path: PathBuf::from("mcp.json"),
+            use_memory: false,
+            start_in_agent_mode: false,
+            skip_onboarding: true,
+            yolo: false,
+            resume_session_id: None,
+            initial_input: None,
+        };
+        App::new(options, &Config::default())
+    }
+
+    fn hover_row(row_y: u16, action: Option<&str>) -> SidebarHoverRow {
+        SidebarHoverRow {
+            row_y,
+            display_text: "row".to_string(),
+            full_text: "row".to_string(),
+            detail: None,
+            is_truncated: false,
+            click_action: action.map(str::to_string),
+        }
+    }
+
+    fn left_click(column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn sidebar_click_resolves_row_actions_inside_section() {
+        let mut app = create_test_app();
+        app.sidebar_hover.sections.push(SidebarHoverSection {
+            content_area: Rect::new(60, 4, 20, 6),
+            lines: vec![
+                "header".to_string(),
+                "job row".to_string(),
+                "job detail".to_string(),
+                "agent row".to_string(),
+            ],
+            rows: vec![
+                hover_row(4, None),
+                hover_row(5, Some("/jobs show shell_x")),
+                hover_row(6, Some("/jobs cancel shell_x")),
+                hover_row(7, Some("/subagents")),
+            ],
+        });
+
+        assert_eq!(
+            sidebar_click_action(&app, left_click(65, 5)).as_deref(),
+            Some("/jobs show shell_x"),
+            "job label row resolves to its show action"
+        );
+        assert_eq!(
+            sidebar_click_action(&app, left_click(79, 6)).as_deref(),
+            Some("/jobs cancel shell_x"),
+            "job detail row resolves to its cancel action"
+        );
+        assert_eq!(
+            sidebar_click_action(&app, left_click(60, 7)).as_deref(),
+            Some("/subagents"),
+            "agent row opens the agents view"
+        );
+        assert_eq!(
+            sidebar_click_action(&app, left_click(65, 4)),
+            None,
+            "header row has no action"
+        );
+    }
+
+    #[test]
+    fn sidebar_click_outside_section_resolves_to_none() {
+        let mut app = create_test_app();
+        app.sidebar_hover.sections.push(SidebarHoverSection {
+            content_area: Rect::new(60, 4, 20, 6),
+            lines: vec!["job row".to_string()],
+            rows: vec![hover_row(4, Some("/jobs show shell_x"))],
+        });
+
+        // Left of the sidebar (transcript area).
+        assert_eq!(sidebar_click_action(&app, left_click(10, 4)), None);
+        // Below the section's content area.
+        assert_eq!(sidebar_click_action(&app, left_click(65, 30)), None);
+        // Inside the section but on an empty row without metadata.
+        assert_eq!(sidebar_click_action(&app, left_click(65, 8)), None);
+    }
+}
