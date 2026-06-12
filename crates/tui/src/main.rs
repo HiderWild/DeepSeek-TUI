@@ -29,6 +29,7 @@ mod composer_stash;
 mod config;
 mod config_persistence;
 mod config_ui;
+mod context_report;
 mod core;
 mod cost_status;
 mod deepseek_theme;
@@ -536,6 +537,9 @@ struct DoctorArgs {
     /// Emit machine-readable JSON output (skips live API connectivity check)
     #[arg(long, default_value_t = false)]
     json: bool,
+    /// Emit only the diagnostic context source map as JSON
+    #[arg(long, default_value_t = false, conflicts_with = "json")]
+    context_json: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -954,7 +958,9 @@ async fn main() -> Result<()> {
             Commands::Doctor(args) => {
                 let config = load_config_from_cli(&cli)?;
                 let workspace = resolve_workspace(&cli);
-                if args.json {
+                if args.context_json {
+                    run_doctor_context_json(&config, &workspace)
+                } else if args.json {
                     run_doctor_json(&config, &workspace, cli.config.as_deref())
                 } else {
                     run_doctor(&config, &workspace, cli.config.as_deref()).await;
@@ -3459,6 +3465,12 @@ fn run_doctor_json(
     });
 
     println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
+fn run_doctor_context_json(config: &Config, workspace: &Path) -> Result<()> {
+    let report = crate::context_report::build_headless_context_report(config, workspace);
+    println!("{}", crate::context_report::context_report_json(&report));
     Ok(())
 }
 

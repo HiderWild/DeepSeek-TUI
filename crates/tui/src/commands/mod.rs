@@ -505,6 +505,10 @@ mod tests {
             result.action,
             Some(AppAction::OpenContextInspector)
         ));
+
+        let report = execute("/context report", &mut app);
+        let message = report.message.expect("context report should return text");
+        assert!(message.contains("Context Source Map"));
     }
 
     #[test]

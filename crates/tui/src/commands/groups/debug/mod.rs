@@ -21,7 +21,7 @@ pub(in crate::commands) fn dispatch(
         "cache" => debug::cache(app, arg),
         "change" => change::change(app, arg),
         "system" | "xitong" => debug::system_prompt(app),
-        "context" | "ctx" => debug::context(app),
+        "context" | "ctx" => debug::context(app, arg),
         "edit" => debug::edit(app),
         "diff" => debug::diff(app),
         "undo" => {

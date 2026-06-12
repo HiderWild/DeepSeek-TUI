@@ -248,7 +248,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     CommandInfo {
         name: "context",
         aliases: &["ctx"],
-        usage: "/context",
+        usage: "/context [report|json|summary]",
         description_id: MessageId::CmdContextDescription,
     },
     CommandInfo {
