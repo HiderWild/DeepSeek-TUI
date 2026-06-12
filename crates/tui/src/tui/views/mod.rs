@@ -498,11 +498,17 @@ impl ConfigView {
             ConfigRow {
                 section: ConfigSection::Model,
                 key: "reasoning_effort".to_string(),
-                value: settings
-                    .reasoning_effort
-                    .as_deref()
-                    .unwrap_or("(config/default)")
-                    .to_string(),
+                value: settings.reasoning_effort.as_deref().map_or_else(
+                    || "(config/default)".to_string(),
+                    |value| {
+                        crate::tui::app::ReasoningEffort::from_setting_for_provider(
+                            value,
+                            app.api_provider,
+                        )
+                        .as_setting_for_provider(app.api_provider)
+                        .to_string()
+                    },
+                ),
                 editable: true,
                 scope: ConfigScope::Saved,
             },
@@ -1146,7 +1152,9 @@ fn config_hint_for_key(key: &str) -> &'static str {
         "max_history" => "integer (0 allowed)",
         "auto_compact_threshold_percent" => "10..=100",
         "default_model" => "deepseek-v4-pro | deepseek-v4-flash | deepseek-* | none/default",
-        "reasoning_effort" => "auto | off | low | medium | high | max | xhigh | default",
+        "reasoning_effort" => {
+            "DeepSeek: auto/off/high/max; Codex: low/medium/high/xhigh; default clears saved value"
+        }
         "mcp_config_path" => "path to mcp.json",
         _ => "",
     }
@@ -2453,6 +2461,22 @@ base_url = "https://api.xiaomimimo.com/v1"
         for (key, _) in Settings::available_settings() {
             assert!(keys.contains(key), "missing native config row for {key}");
         }
+    }
+
+    #[test]
+    fn config_view_displays_saved_codex_reasoning_effort_label() {
+        let _guard = ConfigSettingsEnvGuard::new("reasoning_effort = \"max\"\n");
+        let mut app = create_test_app();
+        app.api_provider = crate::config::ApiProvider::OpenaiCodex;
+
+        let view = ConfigView::new_for_app(&app);
+        let row = view
+            .rows
+            .iter()
+            .find(|row| row.key == "reasoning_effort")
+            .expect("reasoning_effort row");
+
+        assert_eq!(row.value, "xhigh");
     }
 
     #[test]

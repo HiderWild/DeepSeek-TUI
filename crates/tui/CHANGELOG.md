@@ -73,7 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reconcile stale running fanout counts from manager snapshots.
 - **OpenAI Codex reasoning tiers.** Switching from DeepSeek to `openai-codex`
   now normalizes stale reasoning state into Responses-compatible
-  `low`/`medium`/`high`/`xhigh` tiers and reports Codex as a Responses payload
+  `low`/`medium`/`high`/`xhigh` tiers. Startup, `/config`, and the model
+  picker now display Codex labels instead of leaking DeepSeek
+  `off`/`max` names, while Codex still reports as a Responses payload
   provider.
 - **OpenAI Codex context metadata (#3070).** The `gpt-5.5` default and
   CodeWhale aliases now use OpenAI's documented 1,050,000-token context window

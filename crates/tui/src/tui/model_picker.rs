@@ -155,11 +155,23 @@ impl ModelPickerView {
         )
     }
 
+    fn select_effort_for_current_model(&mut self, effort: ReasoningEffort) {
+        let provider = self.resolved_provider().unwrap_or(self.initial_provider);
+        let model_is_auto = self.resolved_model().trim().eq_ignore_ascii_case("auto");
+        let normalized = normalize_picker_effort(effort, provider, model_is_auto);
+        self.selected_effort_idx = picker_efforts_for_provider(provider, model_is_auto)
+            .iter()
+            .position(|candidate| *candidate == normalized)
+            .unwrap_or_else(|| default_picker_effort_idx(provider, model_is_auto));
+    }
+
     fn move_up(&mut self) -> bool {
         match self.focus {
             Pane::Model => {
                 if self.selected_model_idx > 0 {
+                    let effort = self.resolved_effort();
                     self.selected_model_idx -= 1;
+                    self.select_effort_for_current_model(effort);
                     return true;
                 }
             }
@@ -178,7 +190,9 @@ impl ModelPickerView {
             Pane::Model => {
                 let max = self.model_row_count().saturating_sub(1);
                 if self.selected_model_idx < max {
+                    let effort = self.resolved_effort();
                     self.selected_model_idx += 1;
+                    self.select_effort_for_current_model(effort);
                     return true;
                 }
             }
@@ -503,7 +517,11 @@ impl ModalView for ModelPickerView {
             }
             KeyCode::Home => {
                 match self.focus {
-                    Pane::Model => self.selected_model_idx = 0,
+                    Pane::Model => {
+                        let effort = self.resolved_effort();
+                        self.selected_model_idx = 0;
+                        self.select_effort_for_current_model(effort);
+                    }
                     Pane::Effort => self.selected_effort_idx = 0,
                 }
                 ViewAction::None
@@ -511,7 +529,9 @@ impl ModalView for ModelPickerView {
             KeyCode::End => {
                 match self.focus {
                     Pane::Model => {
+                        let effort = self.resolved_effort();
                         self.selected_model_idx = self.model_row_count().saturating_sub(1);
+                        self.select_effort_for_current_model(effort);
                     }
                     Pane::Effort => {
                         self.selected_effort_idx = self.current_efforts().len().saturating_sub(1);
@@ -833,6 +853,65 @@ mod tests {
                 })
                 .collect();
         assert_eq!(labels, vec!["low", "medium", "high", "xhigh"]);
+    }
+
+    #[test]
+    fn picker_remaps_deepseek_off_when_highlighting_saved_codex_model() {
+        let (mut app, _lock) = create_test_app();
+        app.api_provider = crate::config::ApiProvider::Deepseek;
+        app.model = "deepseek-v4-pro".to_string();
+        app.auto_model = false;
+        app.reasoning_effort = ReasoningEffort::Off;
+        app.provider_models
+            .insert("openai-codex".to_string(), "gpt-5.5".to_string());
+
+        let mut view = ModelPickerView::new(&app);
+        assert_eq!(view.resolved_effort(), ReasoningEffort::Off);
+
+        while view.resolved_provider() != Some(crate::config::ApiProvider::OpenaiCodex) {
+            assert!(
+                view.move_down(),
+                "saved Codex model row should be reachable"
+            );
+        }
+
+        assert_eq!(view.resolved_model(), "gpt-5.5");
+        assert_eq!(view.resolved_effort(), ReasoningEffort::Low);
+        assert_eq!(view.selected_effort_idx, 0);
+        let labels = view
+            .current_efforts()
+            .iter()
+            .map(|effort| {
+                effort.display_label_for_provider(crate::config::ApiProvider::OpenaiCodex)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(labels, vec!["low", "medium", "high", "xhigh"]);
+    }
+
+    #[test]
+    fn picker_remaps_deepseek_max_to_codex_xhigh_when_model_provider_changes() {
+        let (mut app, _lock) = create_test_app();
+        app.api_provider = crate::config::ApiProvider::Deepseek;
+        app.model = "deepseek-v4-pro".to_string();
+        app.auto_model = false;
+        app.reasoning_effort = ReasoningEffort::Max;
+        app.provider_models
+            .insert("openai-codex".to_string(), "gpt-5.5".to_string());
+
+        let mut view = ModelPickerView::new(&app);
+        while view.resolved_provider() != Some(crate::config::ApiProvider::OpenaiCodex) {
+            assert!(
+                view.move_down(),
+                "saved Codex model row should be reachable"
+            );
+        }
+
+        assert_eq!(view.resolved_effort(), ReasoningEffort::Max);
+        assert_eq!(
+            view.resolved_effort()
+                .display_label_for_provider(crate::config::ApiProvider::OpenaiCodex),
+            "xhigh"
+        );
     }
 
     #[test]

@@ -795,7 +795,9 @@ pub fn set_config_value(app: &mut App, key: &str, value: &str, persist: bool) ->
                 settings
                     .reasoning_effort
                     .as_deref()
-                    .map_or_else(ReasoningEffort::default, ReasoningEffort::from_setting)
+                    .map_or_else(ReasoningEffort::default, |value| {
+                        ReasoningEffort::from_setting_for_provider(value, app.api_provider)
+                    })
             };
             app.last_effective_reasoning_effort = None;
             app.update_model_compaction_budget();
@@ -824,10 +826,14 @@ pub fn set_config_value(app: &mut App, key: &str, value: &str, persist: bool) ->
             .background_color
             .clone()
             .unwrap_or_else(|| "default".to_string()),
-        "reasoning_effort" | "effort" => settings
-            .reasoning_effort
-            .clone()
-            .unwrap_or_else(|| "config/default".to_string()),
+        "reasoning_effort" | "effort" => settings.reasoning_effort.as_deref().map_or_else(
+            || "config/default".to_string(),
+            |value| {
+                ReasoningEffort::from_setting_for_provider(value, app.api_provider)
+                    .as_setting_for_provider(app.api_provider)
+                    .to_string()
+            },
+        ),
         "composer_vim_mode" | "vim_mode" | "vim" => settings.composer_vim_mode.clone(),
         _ => value.to_string(),
     };
@@ -1357,6 +1363,35 @@ mod tests {
         assert_eq!(app.reasoning_effort, ReasoningEffort::Auto);
         assert!(app.last_effective_model.is_none());
         assert!(app.last_effective_reasoning_effort.is_none());
+    }
+
+    #[test]
+    fn config_reasoning_effort_uses_codex_provider_labels() {
+        let temp_root = env::temp_dir().join(format!(
+            "codewhale-tui-codex-effort-config-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&temp_root).unwrap();
+        let _guard = EnvGuard::new(&temp_root);
+        let mut app = create_test_app();
+        app.api_provider = ApiProvider::OpenaiCodex;
+        app.reasoning_effort = ReasoningEffort::High;
+
+        let result = set_config_value(&mut app, "reasoning_effort", "off", false);
+
+        assert_eq!(app.reasoning_effort, ReasoningEffort::Low);
+        assert_eq!(
+            result.message.as_deref(),
+            Some("reasoning_effort = low (session only, add --save to persist)")
+        );
+
+        let result = set_config_value(&mut app, "reasoning_effort", "xhigh", false);
+
+        assert_eq!(app.reasoning_effort, ReasoningEffort::Max);
+        assert_eq!(
+            result.message.as_deref(),
+            Some("reasoning_effort = xhigh (session only, add --save to persist)")
+        );
     }
 
     #[test]

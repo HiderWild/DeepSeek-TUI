@@ -210,6 +210,11 @@ impl ReasoningEffort {
         }
     }
 
+    #[must_use]
+    pub fn from_setting_for_provider(value: &str, provider: ApiProvider) -> Self {
+        Self::from_setting(value).normalize_for_provider(provider)
+    }
+
     /// Canonical lowercase label used for config storage and UI hints.
     #[must_use]
     pub fn as_setting(self) -> &'static str {
@@ -2096,7 +2101,7 @@ impl App {
             ReasoningEffort::Auto
         } else {
             configured_reasoning_effort.map_or_else(ReasoningEffort::default, |s| {
-                ReasoningEffort::from_setting(s)
+                ReasoningEffort::from_setting_for_provider(s, provider)
             })
         };
 
@@ -5526,6 +5531,44 @@ mod tests {
         assert_eq!(app.reasoning_effort, ReasoningEffort::Low);
         assert!(!app.auto_model);
         assert_eq!(app.reasoning_effort_display_label(), "low");
+    }
+
+    #[test]
+    fn app_new_normalizes_saved_codex_reasoning_effort() {
+        let _lock = lock_test_env();
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let config_path = tmp.path().join("config.toml");
+        let _config_path = EnvVarGuard::set("DEEPSEEK_CONFIG_PATH", &config_path);
+        let _token = EnvVarGuard::set("OPENAI_CODEX_ACCESS_TOKEN", "test-codex-startup-token");
+        let config = Config {
+            provider: Some("openai-codex".to_string()),
+            providers: Some(ProvidersConfig {
+                openai_codex: ProviderConfig {
+                    model: Some(crate::config::DEFAULT_OPENAI_CODEX_MODEL.to_string()),
+                    ..ProviderConfig::default()
+                },
+                ..ProvidersConfig::default()
+            }),
+            ..Config::default()
+        };
+
+        for (raw, expected, display) in [
+            ("off", ReasoningEffort::Low, "low"),
+            ("auto", ReasoningEffort::Medium, "medium"),
+            ("max", ReasoningEffort::Max, "xhigh"),
+        ] {
+            std::fs::write(
+                tmp.path().join("settings.toml"),
+                format!("reasoning_effort = \"{raw}\"\n"),
+            )
+            .expect("settings");
+
+            let app = App::new(test_options(false), &config);
+
+            assert_eq!(app.api_provider, ApiProvider::OpenaiCodex);
+            assert_eq!(app.reasoning_effort, expected, "raw setting {raw}");
+            assert_eq!(app.reasoning_effort_display_label(), display);
+        }
     }
 
     #[test]
