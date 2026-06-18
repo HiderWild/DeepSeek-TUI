@@ -5224,6 +5224,91 @@ fn local_cancel_marks_late_stream_events_for_suppression() {
 }
 
 #[test]
+fn issue_2739_stalled_turn_snapshot_preserves_api_messages() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let manager =
+        crate::session_manager::SessionManager::new(tmp.path().join("sessions")).expect("manager");
+    let mut app = create_test_app();
+    app.api_messages
+        .push(text_message("user", "hello from user"));
+    app.api_messages
+        .push(text_message("assistant", "partial reply"));
+    // Simulate a running turn that stalls.
+    app.is_loading = true;
+    app.runtime_turn_status = Some("in_progress".to_string());
+    app.turn_started_at = Some(Instant::now());
+
+    // recover_stalled_runtime_turn now calls persist_recovery_snapshot
+    // which in turn calls build_session_snapshot. Since persistence
+    // may fail in tests (no real home dir), we verify directly that
+    // build_session_snapshot captures the in-progress messages.
+    let snapshot = build_session_snapshot(&app, &manager);
+    assert_eq!(snapshot.messages.len(), 2);
+    assert_eq!(snapshot.messages[0].role, "user");
+    assert_eq!(snapshot.messages[1].role, "assistant");
+}
+
+#[test]
+fn issue_2739_esc_cancel_preserves_session_messages_before_clear() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let manager =
+        crate::session_manager::SessionManager::new(tmp.path().join("sessions")).expect("manager");
+    let mut app = create_test_app();
+    app.api_messages
+        .push(text_message("user", "esc cancel test"));
+    app.api_messages
+        .push(text_message("assistant", "interrupted by esc"));
+    app.is_loading = true;
+    app.turn_started_at = Some(Instant::now());
+    app.runtime_turn_id = Some("turn_esc_me".to_string());
+    app.runtime_turn_status = Some("in_progress".to_string());
+    app.streaming_state.start_text(0, None);
+
+    // Esc → mark_active_turn_cancelled_locally clears turn state but
+    // persist_recovery_snapshot (called immediately after) captures
+    // the messages before they are discarded.
+    mark_active_turn_cancelled_locally(&mut app);
+    let snapshot = build_session_snapshot(&app, &manager);
+    assert_eq!(snapshot.messages.len(), 2);
+    assert_eq!(snapshot.messages[0].role, "user");
+    assert_eq!(snapshot.messages[1].role, "assistant");
+    // Turn-level bookkeeping must be cleared after cancel.
+    assert!(!app.is_loading);
+    assert!(app.turn_started_at.is_none());
+    assert!(app.runtime_turn_status.is_none());
+}
+
+#[test]
+fn issue_2739_dispatch_timeout_preserves_user_prompt() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let manager =
+        crate::session_manager::SessionManager::new(tmp.path().join("sessions")).expect("manager");
+    let mut app = create_test_app();
+    app.api_messages
+        .push(text_message("user", "prompt that never dispatched"));
+    // Dispatch stalled before the turn ever reached `in_progress`
+    // (runtime_turn_status stays None), so only the dispatch-timeout branch
+    // of reconcile_turn_liveness fires.
+    app.is_loading = true;
+    app.runtime_turn_status = None;
+    app.dispatch_started_at =
+        Some(Instant::now() - DISPATCH_WATCHDOG_TIMEOUT - Duration::from_millis(1));
+    app.turn_started_at = Some(Instant::now());
+
+    let recovered = reconcile_turn_liveness(&mut app, Instant::now(), false);
+
+    assert!(recovered, "dispatch-timeout branch should fire");
+    assert!(!app.is_loading);
+    assert!(app.dispatch_started_at.is_none());
+    // #2739: the user's prompt must survive dispatch-timeout recovery so a
+    // snapshot (and therefore --continue) still has it instead of loading the
+    // previous save.
+    let snapshot = build_session_snapshot(&app, &manager);
+    assert_eq!(snapshot.messages.len(), 1);
+    assert_eq!(snapshot.messages[0].role, "user");
+}
+
+#[test]
 fn test_ctrl_c_exits_when_not_loading() {
     let mut app = create_test_app();
     app.is_loading = false;
